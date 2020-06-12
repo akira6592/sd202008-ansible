@@ -4,9 +4,9 @@
 
     vars:    # (a)
       expected:
-        ospf_neighbors:
+        ospf_neighbors:   # 期待するOSPFネイバー
           - 10.255.255.2
-        routes:
+        routes:           # 期待するルート情報
           - network: 10.2.0.0
             prefix_len: 24
             next_hop: 10.0.0.2
