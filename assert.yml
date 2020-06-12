@@ -1,0 +1,50 @@
+---
+  - hosts: ios01
+    gather_facts: false
+
+    vars:    # (a)
+      expected:
+        ospf_neighbors:
+          - 10.255.255.2
+        routes:
+          - network: 10.2.0.0
+            prefix_len: 24
+            next_hop: 10.0.0.2
+
+    tasks:
+      - name: execute show commands    # (b)
+        ios_command:
+          commands:
+            - show ip ospf neighbor
+            - show ip route
+        register: res_show
+
+      - name: parse show commands result    # (c)
+        set_fact:
+          neighbors: "{{ res_show.stdout[0] | parse_cli_textfsm(template_ospf_neighbor) }}"
+          routes: "{{ res_show.stdout[1] | parse_cli_textfsm(template_route) }}"
+        vars:
+          template_ospf_neighbor: ntc-templates/templates/cisco_ios_show_ip_ospf_neighbor.textfsm
+          template_route: ntc-templates/templates/cisco_ios_show_ip_route.textfsm
+  
+      - name: assert ospf neighbors    # (d)
+        assert:
+          that:
+            - "'FULL' in state"
+          fail_msg: "actual state is {{ state }}"
+        vars:
+          state: "{{ (neighbors | selectattr('NEIGHBOR_ID', '==', item) | first).STATE }}"
+        loop: "{{ expected.ospf_neighbors }}"
+
+      - name: assert routes    # (e)
+        assert:
+          that:
+            - next_hop == item.next_hop
+          fail_msg: "actual next_hop is {{ next_hop }}"
+        vars:
+          network: "{{ routes | selectattr('NETWORK', '==', item.network) | list }}"
+          mask: "{{ network | selectattr('MASK', '==', item.prefix_len | string) | first }}"
+          next_hop: "{{ mask.NEXTHOP_IP }}"
+        loop: "{{ expected.routes }}"
+        loop_control:
+          label: "{{ item.network }}/{{ item.prefix_len }}"
